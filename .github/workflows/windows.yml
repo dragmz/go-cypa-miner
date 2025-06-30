@@ -1,4 +1,4 @@
-name: Build Go C-Shared Library
+name: windows
 
 on: workflow_dispatch
 
