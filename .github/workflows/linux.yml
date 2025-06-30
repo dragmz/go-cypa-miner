@@ -1,9 +1,9 @@
-name: Build Go C-Shared Library
+name: linux
 
 on: workflow_dispatch
 
 jobs:
-  build-windows:
+  build-linux:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -13,4 +13,11 @@ jobs:
       - name: Build c-shared library for Linux (.so)
         run: |
           cd lib/gvm
-          go build -buildmode=c-shared -o ../../gvm_linux.so
+          go build -buildmode=c-shared -o gvm_linux.so
+      - name: Create release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          tag: dev-linux
+          artifacts: gvm_linux.so
+          prerelease: true
