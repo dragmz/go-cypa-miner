@@ -60,7 +60,6 @@ func NewMiner(algodAddr string, algodToken string, appid uint64) (*Miner, error)
 }
 
 func (m *Miner) Fulfill(sk ed25519.PrivateKey, key []byte, ownerBytes []byte) error {
-	fmt.Println(m.ac)
 	owner := types.Address(ownerBytes)
 
 	match_acc, err := crypto.AccountFromPrivateKey(sk)
@@ -77,6 +76,9 @@ func (m *Miner) Fulfill(sk ed25519.PrivateKey, key []byte, ownerBytes []byte) er
 		return errors.Wrap(err, "failed to get suggested params")
 	}
 
+	sp.FlatFee = true
+	sp.Fee = 0
+
 	atc := transaction.AtomicTransactionComposer{}
 
 	extra_method, err := abi.MethodFromSignature("extra()void")
@@ -84,13 +86,14 @@ func (m *Miner) Fulfill(sk ed25519.PrivateKey, key []byte, ownerBytes []byte) er
 		return errors.Wrap(err, "failed to create extra method from signature")
 	}
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		atc.AddMethodCall(transaction.AddMethodCallParams{
 			AppID:           m.appid,
 			Method:          extra_method,
 			Sender:          match_acc.Address,
 			SuggestedParams: sp,
 			Signer:          match_signer,
+			Note:            []byte(fmt.Sprintf("extra opcodes %d", i)),
 		})
 	}
 
@@ -103,6 +106,8 @@ func (m *Miner) Fulfill(sk ed25519.PrivateKey, key []byte, ownerBytes []byte) er
 	if err != nil {
 		return errors.Wrap(err, "failed to create payment transaction")
 	}
+
+	pay_tx.Fee = 10_000
 
 	subsidy_signer := transaction.LogicSigAccountTransactionSigner{
 		LogicSigAccount: m.subsidy,
