@@ -1,0 +1,124 @@
+#pragma version 10
+#pragma typetrack false
+
+// smart_contracts/vanity/contract.algo.ts::program() -> uint64:
+main:
+
+	intcblock 1 TMPL_VANITY_APP_ID
+	// smart_contracts/vanity/contract.algo.ts:32
+	// const call_tx = gtxn.ApplicationCallTxn(Txn.groupIndex + 1);
+	txn GroupIndex
+
+	intc_0 // 1
+	+
+	dup
+	gtxns TypeEnum
+	pushint 6 // appl
+	==
+	assert // transaction type is appl
+
+	// smart_contracts/vanity/contract.algo.ts:34
+	// assert(call_tx.appId.id === FulfillAppId, "must call the application");
+	dup
+
+	gtxns ApplicationID
+	// smart_contracts/vanity/contract.algo.ts:26
+	// const FulfillAppId = TemplateVar<uint64>("VANITY_APP_ID");
+	intc_1 // TMPL_VANITY_APP_ID
+
+	// smart_contracts/vanity/contract.algo.ts:34
+	// assert(call_tx.appId.id === FulfillAppId, "must call the application");
+	==
+
+	assert // must call the application
+
+	// smart_contracts/vanity/contract.algo.ts:35
+	// assert(call_tx.fee === 0, "must be a zero fee call");
+	dup
+
+	gtxns Fee
+	!
+	assert // must be a zero fee call
+
+	// smart_contracts/vanity/contract.algo.ts:36
+	// assert(call_tx.appArgs(0) === Bytes(methodSelector(Vanity.prototype.fulfill)), "must be fulfill operation call");
+	dup
+
+	pushint 0 // 0
+	gtxnsas ApplicationArgs
+	pushbytes 0x58afc30f // method "fulfill(byte[],byte[64],address)void"
+	==
+	assert // must be fulfill operation call
+
+	// smart_contracts/vanity/contract.algo.ts:38
+	// const pay_tx = gtxn.PaymentTxn(Txn.groupIndex);
+	txn GroupIndex
+
+	dup
+	gtxns TypeEnum
+	intc_0 // pay
+	==
+	assert // transaction type is pay
+
+	// smart_contracts/vanity/contract.algo.ts:40
+	// assert(pay_tx.closeRemainderTo === Global.zeroAddress, 'closeRemainderTo must be zero address');
+	dup
+
+	gtxns CloseRemainderTo
+	global ZeroAddress
+	==
+	assert // closeRemainderTo must be zero address
+
+	// smart_contracts/vanity/contract.algo.ts:41
+	// assert(pay_tx.receiver === call_tx.sender, "payment transaction must be to the sender of the call transaction");
+	dup
+
+	gtxns Receiver
+	uncover 2
+	gtxns Sender
+	==
+	assert // payment transaction must be to the sender of the call transaction
+
+	// smart_contracts/vanity/contract.algo.ts:42
+	// assert(pay_tx.amount === SubsidyAmount, "payment transaction must be for the correct subsidy amount");
+	dup
+
+	gtxns Amount
+	// smart_contracts/vanity/contract.algo.ts:27
+	// const SubsidyAmount: uint64 = 100_000;
+	pushint 100000 // 100000
+
+	// smart_contracts/vanity/contract.algo.ts:42
+	// assert(pay_tx.amount === SubsidyAmount, "payment transaction must be for the correct subsidy amount");
+	==
+
+	assert // payment transaction must be for the correct subsidy amount
+
+	// smart_contracts/vanity/contract.algo.ts:43
+	// assert(pay_tx.fee === SubsidyFee, "payment transaction must be for the correct fee amount");
+	gtxns Fee
+
+	// smart_contracts/vanity/contract.algo.ts:28
+	// const SubsidyFee: uint64 = 10_000;
+	pushint 10000 // 10000
+
+	// smart_contracts/vanity/contract.algo.ts:43
+	// assert(pay_tx.fee === SubsidyFee, "payment transaction must be for the correct fee amount");
+	==
+
+	assert // payment transaction must be for the correct fee amount
+
+	// smart_contracts/vanity/contract.algo.ts:44
+	// assert(Txn.rekeyTo === Global.zeroAddress, 'rekeyTo must be zero address');
+	txn RekeyTo
+
+	global ZeroAddress
+	==
+	assert // rekeyTo must be zero address
+
+	// smart_contracts/vanity/contract.algo.ts:46
+	// return true;
+	intc_0 // 1
+
+	return
+
