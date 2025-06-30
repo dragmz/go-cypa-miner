@@ -1,0 +1,22 @@
+name: windows
+
+on: workflow_dispatch
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: Build c-shared library for Windows (.dll)
+        run: |
+          go build -buildmode=c-shared -o gvm_windows.dll lib/gvm/main.go
+      - name: Create release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          tag: dev-windows
+          artifacts: gvm_windows.dll
+          prerelease: true
