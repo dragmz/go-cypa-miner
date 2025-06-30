@@ -1,0 +1,16 @@
+name: Build Go C-Shared Library
+
+on: workflow_dispatch
+
+jobs:
+  build-windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: Build c-shared library for Linux (.so)
+        run: |
+          cd lib/gvm
+          go build -buildmode=c-shared -o ../../gvm_linux.so
