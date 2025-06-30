@@ -10,7 +10,13 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
-      - name: Build c-shared library for Windows (.dll)
+      - name: Build c-shared library for Windows (.so)
         run: |
-          cd lib/gvm
-          go build -buildmode=c-shared -o ../../gvm_windows.dll
+          go build -buildmode=c-shared -o gvm_windows.so lib/gvm/main.go
+      - name: Create release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          tag: dev-windows
+          artifacts: gvm_windows.so
+          prerelease: true
