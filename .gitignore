@@ -1,3 +1,7 @@
+.cypa
 *.dll~
 *.dll
+*.h
 *.so
+*.exe
+bacon.json
