@@ -8,18 +8,21 @@ import (
 	"path"
 	"time"
 
+	"github.com/algorand/go-algorand-sdk/v2/client/v2/common"
 	"github.com/algorand/go-algorand-sdk/v2/crypto"
 	"github.com/algorand/go-algorand-sdk/v2/mnemonic"
 	"github.com/algorand/go-algorand-sdk/v2/types"
+	"github.com/pkg/errors"
 )
 
 type args struct {
-	Algod      string
-	AlgodToken string
-	AppID      uint64
-	Addr       string
-	MaxLength  int
-	Delay      uint64
+	Algod          string
+	AlgodToken     string
+	AppID          uint64
+	Addr           string
+	MaxLength      int
+	OrdersInterval uint64
+	ExpiryInterval uint64
 }
 
 func run(a args) error {
@@ -86,9 +89,29 @@ func run(a args) error {
 
 				rsagg := gvm.NewRsaggGenerator()
 
-				sk, err := rsagg.Generate(order.Text)
+				lastCheck := time.Now()
+
+				sk, err := rsagg.Generate(order.Text, func() bool {
+					if time.Since(lastCheck) < time.Duration(a.ExpiryInterval)*time.Millisecond {
+						return true
+					}
+
+					result := func() bool {
+						_, err := miner.Read(key)
+						if _, ok := err.(common.NotFound); ok {
+							fmt.Println("Order not found, skipping generation..")
+							return false
+						}
+
+						return true
+					}()
+
+					lastCheck = time.Now()
+					return result
+				})
+
 				if err != nil {
-					return err
+					return errors.Wrap(err, "failed to generate private key")
 				}
 
 				addr, err := crypto.GenerateAddressFromSK(sk)
@@ -107,7 +130,7 @@ func run(a args) error {
 				return nil
 			}
 
-			delay := time.Duration(a.Delay) * time.Millisecond
+			delay := time.Duration(a.OrdersInterval) * time.Millisecond
 			fmt.Printf("No orders found, sleeping for %v..\n", delay)
 			time.Sleep(delay)
 
@@ -127,7 +150,8 @@ func main() {
 	flag.Uint64Var(&a.AppID, "appid", 742018771, "Application ID")
 	flag.StringVar(&a.Addr, "addr", "", "Address to use for the miner")
 	flag.IntVar(&a.MaxLength, "max-length", 0, "Maximum length of the prefix to search for")
-	flag.Uint64Var(&a.Delay, "delay", 10000, "Delay in milliseconds between checks for new orders")
+	flag.Uint64Var(&a.OrdersInterval, "orders-interval", 10000, "Delay in milliseconds between checks for new orders")
+	flag.Uint64Var(&a.ExpiryInterval, "expiry-interval", 30000, "Delay in milliseconds between checks for order expiry")
 
 	flag.Parse()
 
