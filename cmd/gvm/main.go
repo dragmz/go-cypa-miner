@@ -4,13 +4,13 @@ import (
 	"flag"
 	"fmt"
 	"gvm"
-	"os"
-	"path"
+	"math"
 	"time"
+
+	"gvm/log"
 
 	"github.com/algorand/go-algorand-sdk/v2/client/v2/common"
 	"github.com/algorand/go-algorand-sdk/v2/crypto"
-	"github.com/algorand/go-algorand-sdk/v2/mnemonic"
 	"github.com/algorand/go-algorand-sdk/v2/types"
 	"github.com/pkg/errors"
 )
@@ -26,43 +26,15 @@ type args struct {
 }
 
 func run(a args) error {
+	var err error
+
+	log.Info("Starting CYPA miner node")
+
 	if a.Addr == "" {
-		fmt.Println("No address provided..")
-		os.Mkdir(".cypa", os.ModePerm)
-		fp := path.Join(".cypa", "secret")
-
-		_, err := os.Stat(fp)
-		if os.IsNotExist(err) {
-			fmt.Println("No secret file found, generating a new address..")
-
-			acc := crypto.GenerateAccount()
-
-			mnemonics, err := mnemonic.FromPrivateKey(acc.PrivateKey)
-			if err != nil {
-				return fmt.Errorf("failed to generate mnemonic: %w", err)
-			}
-
-			os.WriteFile(fp, []byte(mnemonics), os.ModePerm)
-		}
-
-		fmt.Println("Reading address from secret file..")
-
-		data, err := os.ReadFile(fp)
+		a.Addr, err = gvm.ReadAddressFromSecret()
 		if err != nil {
-			return fmt.Errorf("failed to read secret file: %w", err)
+			return fmt.Errorf("failed to read address from secret: %w", err)
 		}
-
-		sk, err := mnemonic.ToPrivateKey(string(data))
-		if err != nil {
-			return fmt.Errorf("failed to generate address from secret key: %w", err)
-		}
-
-		addr, err := crypto.GenerateAddressFromSK(sk)
-		if err != nil {
-			return fmt.Errorf("failed to generate address from private key: %w", err)
-		}
-
-		a.Addr = addr.String()
 	}
 
 	rewards, err := types.DecodeAddress(a.Addr)
@@ -70,7 +42,9 @@ func run(a args) error {
 		return fmt.Errorf("failed to decode address: %w", err)
 	}
 
-	fmt.Println("Using address:", rewards.String())
+	log.Info("Algod:", a.Algod)
+	log.Info("Application ID:", a.AppID)
+	log.Info("Rewards address:", rewards.String())
 
 	miner, err := gvm.NewMiner(a.Algod, a.AlgodToken, a.AppID)
 	if err != nil {
@@ -79,61 +53,72 @@ func run(a args) error {
 
 	for {
 		err := func() error {
-			for key := range miner.List(a.MaxLength) {
-				order, err := miner.Read(key)
-				if err != nil {
-					continue
+			var header gvm.OrderHeader
+
+			length := uint64(math.MaxUint64)
+			found := false
+
+			for item := range miner.List(a.MaxLength) {
+				if item.Length < length {
+					length = item.Length
+					header = item
+					found = true
 				}
+			}
 
-				fmt.Printf("Order: %+v\n", order)
-
-				rsagg := gvm.NewRsaggGenerator()
-
-				lastCheck := time.Now()
-
-				sk, err := rsagg.Generate(order.Text, func() bool {
-					if time.Since(lastCheck) < time.Duration(a.ExpiryInterval)*time.Millisecond {
-						return true
-					}
-
-					result := func() bool {
-						_, err := miner.Read(key)
-						if _, ok := err.(common.NotFound); ok {
-							fmt.Println("Order not found, skipping generation..")
-							return false
-						}
-
-						return true
-					}()
-
-					lastCheck = time.Now()
-					return result
-				})
-
-				if err != nil {
-					return errors.Wrap(err, "failed to generate private key")
-				}
-
-				addr, err := crypto.GenerateAddressFromSK(sk)
-				if err != nil {
-					return fmt.Errorf("failed to generate address from private key: %w", err)
-				}
-
-				fmt.Printf("Fulfill order for address: %s\n", addr)
-
-				err = miner.Fulfill(sk, order.Key, rewards[:])
-				if err != nil {
-					return fmt.Errorf("failed to fulfill order: %w", err)
-				}
-
-				fmt.Println("Order fulfilled successfully!")
+			if !found {
+				delay := time.Duration(a.OrdersInterval) * time.Millisecond
+				fmt.Printf("No orders found, sleeping for %v..\n", delay)
+				time.Sleep(delay)
 				return nil
 			}
 
-			delay := time.Duration(a.OrdersInterval) * time.Millisecond
-			fmt.Printf("No orders found, sleeping for %v..\n", delay)
-			time.Sleep(delay)
+			order, err := miner.Read(header.Key)
+			if err != nil {
+				return fmt.Errorf("failed to read order: %w", err)
+			}
 
+			fmt.Printf("Order - Id: %d, Prefix: %s\n", order.Id, order.Text)
+
+			rsagg := gvm.NewRsaggGenerator()
+			last := time.Now()
+
+			sk, err := rsagg.Generate(order.Text, func() bool {
+				if time.Since(last) < time.Duration(a.ExpiryInterval)*time.Millisecond {
+					return true
+				}
+
+				result := func() bool {
+					_, err := miner.Read(header.Key)
+					if _, ok := err.(common.NotFound); ok {
+						fmt.Println("Order not found, skipping generation..")
+						return false
+					}
+
+					return true
+				}()
+
+				last = time.Now()
+				return result
+			})
+
+			if err != nil {
+				return errors.Wrap(err, "failed to generate private key")
+			}
+
+			addr, err := crypto.GenerateAddressFromSK(sk)
+			if err != nil {
+				return fmt.Errorf("failed to generate address from private key: %w", err)
+			}
+
+			fmt.Printf("Fulfill order for address: %s\n", addr)
+
+			err = miner.Fulfill(sk, order.Key, order.Owner, rewards)
+			if err != nil {
+				return fmt.Errorf("failed to fulfill order: %w", err)
+			}
+
+			fmt.Println("Order fulfilled successfully!")
 			return nil
 		}()
 

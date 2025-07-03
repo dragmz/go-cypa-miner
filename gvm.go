@@ -29,6 +29,11 @@ type Miner struct {
 	subsidy crypto.LogicSigAccount
 }
 
+type OrderHeader struct {
+	Key    []byte
+	Length uint64
+}
+
 type Order struct {
 	Key []byte
 
@@ -65,8 +70,8 @@ func convertToByteSlice(slice []interface{}) ([]byte, error) {
 	return result, nil
 }
 
-func (m *Miner) List(maxLength int) iter.Seq[[]byte] {
-	return func(yield func([]byte) bool) {
+func (m *Miner) List(maxLength int) iter.Seq[OrderHeader] {
+	return func(yield func(OrderHeader) bool) {
 		response, err := m.ac.GetApplicationBoxes(m.appid).Do(context.Background())
 		if err != nil {
 			return
@@ -94,7 +99,12 @@ func (m *Miner) List(maxLength int) iter.Seq[[]byte] {
 			}
 
 			key := item.Name[1:]
-			if !yield(key) {
+			header := OrderHeader{
+				Key:    key,
+				Length: length,
+			}
+
+			if !yield(header) {
 				return // Stop iteration if yield returns false
 			}
 		}
@@ -185,9 +195,7 @@ func NewMiner(algodAddr string, algodToken string, appid uint64) (*Miner, error)
 	}, nil
 }
 
-func (m *Miner) Fulfill(sk ed25519.PrivateKey, key []byte, ownerBytes []byte) error {
-	owner := types.Address(ownerBytes)
-
+func (m *Miner) Fulfill(sk ed25519.PrivateKey, key []byte, owner types.Address, rewards types.Address) error {
 	match_acc, err := crypto.AccountFromPrivateKey(sk)
 	if err != nil {
 		return errors.Wrap(err, "failed to create account from private key")
@@ -265,7 +273,7 @@ func (m *Miner) Fulfill(sk ed25519.PrivateKey, key []byte, ownerBytes []byte) er
 		MethodArgs: []interface{}{
 			key,
 			proof,
-			match_acc.Address,
+			rewards,
 		},
 		Sender:          match_acc.Address,
 		Signer:          match_signer,
@@ -281,7 +289,7 @@ func (m *Miner) Fulfill(sk ed25519.PrivateKey, key []byte, ownerBytes []byte) er
 			},
 		},
 		ForeignAccounts: []string{
-			subsidy_addr.String(),
+			rewards.String(),
 		},
 		RekeyTo: owner,
 	})
