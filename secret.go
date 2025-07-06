@@ -4,46 +4,32 @@ import (
 	"fmt"
 	"os"
 	"path"
-
-	"github.com/algorand/go-algorand-sdk/v2/crypto"
-	"github.com/algorand/go-algorand-sdk/v2/mnemonic"
 )
 
-func ReadAddressFromSecret() (string, error) {
-	fmt.Println("No address provided..")
+func WriteRewardsToConfig(addr string) error {
 	os.Mkdir(".cypa", os.ModePerm)
-	fp := path.Join(".cypa", "secret")
+	fp := path.Join(".cypa", "rewards")
+
+	err := os.WriteFile(fp, []byte(addr), 0600)
+	if err != nil {
+		return fmt.Errorf("failed to write secret file: %w", err)
+	}
+	return nil
+}
+
+func ReadRewardsFromConfig() (string, error) {
+	os.Mkdir(".cypa", os.ModePerm)
+	fp := path.Join(".cypa", "rewards")
 
 	_, err := os.Stat(fp)
 	if os.IsNotExist(err) {
-		fmt.Println("No secret file found, generating a new address..")
-
-		acc := crypto.GenerateAccount()
-
-		mnemonics, err := mnemonic.FromPrivateKey(acc.PrivateKey)
-		if err != nil {
-			return "", fmt.Errorf("failed to generate mnemonic: %w", err)
-		}
-
-		os.WriteFile(fp, []byte(mnemonics), os.ModePerm)
+		return "", nil
 	}
 
-	fmt.Println("Reading address from secret file:", fp)
-
-	data, err := os.ReadFile(fp)
+	addr, err := os.ReadFile(fp)
 	if err != nil {
 		return "", fmt.Errorf("failed to read secret file: %w", err)
 	}
 
-	sk, err := mnemonic.ToPrivateKey(string(data))
-	if err != nil {
-		return "", fmt.Errorf("failed to generate address from secret key: %w", err)
-	}
-
-	addr, err := crypto.GenerateAddressFromSK(sk)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate address from private key: %w", err)
-	}
-
-	return addr.String(), nil
+	return string(addr), nil
 }

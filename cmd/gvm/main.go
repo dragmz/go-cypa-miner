@@ -23,33 +23,62 @@ type args struct {
 	MaxLength      int
 	OrdersInterval uint64
 	ExpiryInterval uint64
+	NonInteractive bool
+	Batch          uint64
 }
 
 func run(a args) error {
-	var err error
-
-	log.Info("Starting CYPA miner node")
-
 	if a.Addr == "" {
-		a.Addr, err = gvm.ReadAddressFromSecret()
+		addr, err := gvm.ReadRewardsFromConfig()
 		if err != nil {
-			return fmt.Errorf("failed to read address from secret: %w", err)
+			return errors.Wrap(err, "failed to read address from config")
+		}
+
+		a.Addr = addr
+
+		if a.Addr == "" {
+			if !a.NonInteractive {
+				fmt.Print("Enter rewards address: ")
+				_, err := fmt.Scanln(&a.Addr)
+				if err != nil {
+					return fmt.Errorf("failed to read address: %w", err)
+				}
+			}
+		}
+
+		if a.Addr == "" {
+			fmt.Println("Address is required, either provide it via command line or interactively.")
 		}
 	}
+
+	log.Info("CYPA miner starting")
 
 	rewards, err := types.DecodeAddress(a.Addr)
 	if err != nil {
 		return fmt.Errorf("failed to decode address: %w", err)
 	}
 
+	err = gvm.WriteRewardsToConfig(a.Addr)
+	if err != nil {
+		return fmt.Errorf("failed to write address to config: %w", err)
+	}
+
 	log.Info("Algod:", a.Algod)
 	log.Info("Application ID:", a.AppID)
 	log.Info("Rewards address:", rewards.String())
+
+	if a.MaxLength > 0 {
+		log.Info("Max length:", a.MaxLength)
+	} else {
+		log.Info("Max length: no limit")
+	}
 
 	miner, err := gvm.NewMiner(a.Algod, a.AlgodToken, a.AppID)
 	if err != nil {
 		return err
 	}
+
+	log.Info("Miner initialized successfully. Awaiting for orders..")
 
 	for {
 		err := func() error {
@@ -78,9 +107,13 @@ func run(a args) error {
 				return fmt.Errorf("failed to read order: %w", err)
 			}
 
-			fmt.Printf("Order - Id: %d, Prefix: %s\n", order.Id, order.Text)
+			fmt.Printf("Order received - Id: %d, Prefix: %s\n", order.Id, order.Text)
 
-			rsagg := gvm.NewRsaggGenerator()
+			rsagg, err := gvm.NewRsaggGenerator(a.Batch)
+			if err != nil {
+				return fmt.Errorf("failed to create Rsagg generator: %w", err)
+			}
+
 			last := time.Now()
 
 			sk, err := rsagg.Generate(order.Text, func() bool {
@@ -88,15 +121,22 @@ func run(a args) error {
 					return true
 				}
 
+				fmt.Println("Checking order validity...")
+
 				result := func() bool {
 					_, err := miner.Read(header.Key)
 					if _, ok := err.(common.NotFound); ok {
-						fmt.Println("Order not found, skipping generation..")
 						return false
 					}
 
 					return true
 				}()
+
+				if result {
+					fmt.Println("Order is still valid, continuing generation...")
+				} else {
+					fmt.Println("Order is no longer valid, stopping generation.")
+				}
 
 				last = time.Now()
 				return result
@@ -137,6 +177,8 @@ func main() {
 	flag.IntVar(&a.MaxLength, "max-length", 0, "Maximum length of the prefix to search for")
 	flag.Uint64Var(&a.OrdersInterval, "orders-interval", 10000, "Delay in milliseconds between checks for new orders")
 	flag.Uint64Var(&a.ExpiryInterval, "expiry-interval", 30000, "Delay in milliseconds between checks for order expiry")
+	flag.BoolVar(&a.NonInteractive, "non-interactive", false, "Run in non-interactive mode (no prompts)")
+	flag.Uint64Var(&a.Batch, "batch", 1000, "Batch size for the Rsagg generator")
 
 	flag.Parse()
 
