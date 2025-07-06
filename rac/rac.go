@@ -1,6 +1,7 @@
 package rac
 
-// #cgo LDFLAGS: -L${SRCDIR}/../rsagg/target/release -lrac -static -lNtosKrnl -lBCrypt
+// #cgo windows LDFLAGS: -L${SRCDIR}/../rsagg/target/release -lrac -static -lNtosKrnl -lBCrypt
+// #cgo linux   LDFLAGS: -L${SRCDIR}/../rsagg/target/release -lrac
 // #include <stdarg.h>
 // #include <stdint.h>
 // #include <stdlib.h>
