@@ -1,0 +1,3 @@
+[submodule "rsagg"]
+	path = rsagg
+	url = https://github.com/dragmz/rsagg

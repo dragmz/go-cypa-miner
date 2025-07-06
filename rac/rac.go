@@ -1,6 +1,6 @@
 package rac
 
-// #cgo LDFLAGS: -L${SRCDIR}/../../rsagg/target/release -lrac -static -lNtosKrnl -lBCrypt
+// #cgo LDFLAGS: -L${SRCDIR}/../rsagg/target/release -lrac -static -lNtosKrnl -lBCrypt
 // #include <stdarg.h>
 // #include <stdint.h>
 // #include <stdlib.h>
